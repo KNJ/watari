@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	cookiejar "github.com/juju/persistent-cookiejar"
 )
 
 // CSRFTokenBringer ...
@@ -34,11 +36,37 @@ type Credentials struct {
 	Password string
 }
 
+// Client ...
+type Client struct {
+	HTTP      *http.Client
+	CookieJar *cookiejar.Jar
+}
+
 // ErrRedirectAttempted ...
 var ErrRedirectAttempted = errors.New("redirect")
 
+// NewClient provides a client wrapping http.Client and CookieJar
+// If your session file already exists in your local disk, the
+// CookieJar will resume the session.
+func NewClient(FilePath string) *Client {
+	jar, err := cookiejar.New(&cookiejar.Options{Filename: FilePath})
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	client := &http.Client{
+		Jar:     jar,
+		Timeout: 10 * time.Second,
+	}
+
+	return &Client{
+		HTTP:      client,
+		CookieJar: jar,
+	}
+}
+
 // Access ...
-func Access(client *http.Client, profile *Profile) (resp *http.Response, err error) {
+func Access(client *Client, profile *Profile) (resp *http.Response, err error) {
 	resp, auth, err := Attempt(client, profile)
 	if auth == true && err != nil {
 		fmt.Println(err)
@@ -52,12 +80,12 @@ func Access(client *http.Client, profile *Profile) (resp *http.Response, err err
 }
 
 // Attempt ...
-func Attempt(client *http.Client, profile *Profile) (resp *http.Response, auth bool, err error) {
+func Attempt(client *Client, profile *Profile) (resp *http.Response, auth bool, err error) {
 	auth = true
-	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+	client.HTTP.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return ErrRedirectAttempted
 	}
-	resp, err = client.Get(profile.Destination)
+	resp, err = client.HTTP.Get(profile.Destination)
 
 	// If redirected, the client tries to get authorized.
 	if urlError, ok := err.(*url.Error); ok && urlError.Err == ErrRedirectAttempted {
@@ -66,7 +94,7 @@ func Attempt(client *http.Client, profile *Profile) (resp *http.Response, auth b
 			return
 		}
 
-		resp, err = client.Get(profile.Login)
+		resp, err = client.HTTP.Get(profile.Login)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -94,18 +122,23 @@ func Attempt(client *http.Client, profile *Profile) (resp *http.Response, auth b
 		values := url.Values{}
 		values.Add(profile.Username, profile.Credentials.Username)
 		values.Add(profile.Password, profile.Credentials.Password)
-		values.Add(profile.CSRFToken, token)
+		if token != "" {
+			values.Add(profile.CSRFToken, token)
+		}
 
 		// Attempt to sign in.
 		req, _ := http.NewRequest("POST", profile.Login, bytes.NewBufferString(values.Encode()))
 		req.Header.Add("Referer", profile.Login)
 		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-		resp, err = client.Do(req)
+		resp, err = client.HTTP.Do(req)
 		defer resp.Body.Close()
 		if urlError, ok := err.(*url.Error); ok && urlError.Err == ErrRedirectAttempted {
+			// save session
+			_ = client.CookieJar.Save()
+
 			auth = true
-			resp, err = client.Get(profile.Destination)
+			resp, err = client.HTTP.Get(profile.Destination)
 		}
 	}
 
