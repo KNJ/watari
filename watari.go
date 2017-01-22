@@ -11,8 +11,11 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	cookiejar "github.com/juju/persistent-cookiejar"
+	"github.com/juju/persistent-cookiejar"
 )
+
+// ErrRedirectAttempted ...
+var ErrRedirectAttempted = errors.New("redirect")
 
 // CSRFTokenBringer ...
 type CSRFTokenBringer interface {
@@ -36,20 +39,11 @@ type Credentials struct {
 	Password string
 }
 
-// Client ...
-type Client struct {
-	HTTP      *http.Client
-	CookieJar *cookiejar.Jar
-}
-
-// ErrRedirectAttempted ...
-var ErrRedirectAttempted = errors.New("redirect")
-
 // NewClient provides a client wrapping http.Client and CookieJar
 // If your session file already exists in your local disk, the
 // CookieJar will resume the session.
-func NewClient(FilePath string) *Client {
-	jar, err := cookiejar.New(&cookiejar.Options{Filename: FilePath})
+func NewClient(filePath string) *Client {
+	jar, err := cookiejar.New(&cookiejar.Options{Filename: filePath})
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -63,6 +57,29 @@ func NewClient(FilePath string) *Client {
 		HTTP:      client,
 		CookieJar: jar,
 	}
+}
+
+// Scrape ...
+func Scrape(client *Client, profile *Profile, fn func(*goquery.Document) interface{}) (result interface{}, err error) {
+	resp, err := Access(client, profile)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	reader := strings.NewReader(string(b))
+
+	doc, err := goquery.NewDocumentFromReader(reader)
+	if err != nil {
+		fmt.Println(err)
+	}
+	result = fn(doc)
+	return
 }
 
 // Access ...
@@ -85,7 +102,7 @@ func Attempt(client *Client, profile *Profile) (resp *http.Response, auth bool, 
 	client.HTTP.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return ErrRedirectAttempted
 	}
-	resp, err = client.HTTP.Get(profile.Destination)
+	resp, err = client.Get(profile.Destination)
 
 	// If redirected, the client tries to get authorized.
 	if urlError, ok := err.(*url.Error); ok && urlError.Err == ErrRedirectAttempted {
@@ -130,16 +147,21 @@ func Attempt(client *Client, profile *Profile) (resp *http.Response, auth bool, 
 		req, _ := http.NewRequest("POST", profile.Login, bytes.NewBufferString(values.Encode()))
 		req.Header.Add("Referer", profile.Login)
 		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		if client.UserAgent != "" {
+			req.Header.Add("User-Agent", client.UserAgent)
+		}
 
 		resp, err = client.HTTP.Do(req)
 		defer resp.Body.Close()
 		if urlError, ok := err.(*url.Error); ok && urlError.Err == ErrRedirectAttempted {
 			// save session
 			_ = client.CookieJar.Save()
-
 			auth = true
-			resp, err = client.HTTP.Get(profile.Destination)
+			resp, err = client.Get(profile.Destination)
 		}
+	} else {
+		// save session
+		_ = client.CookieJar.Save()
 	}
 
 	return
