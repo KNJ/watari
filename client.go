@@ -2,6 +2,7 @@ package watari
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/juju/persistent-cookiejar"
 )
@@ -11,6 +12,11 @@ type Client struct {
 	HTTP      *http.Client
 	CookieJar *cookiejar.Jar
 	UserAgent string
+}
+
+// SetTimeout ...
+func (c *Client) SetTimeout(d time.Duration) {
+	c.HTTP.Timeout = d
 }
 
 // SetUserAgent ...

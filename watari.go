@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/juju/persistent-cookiejar"
@@ -49,8 +48,7 @@ func NewClient(filePath string) *Client {
 	}
 
 	client := &http.Client{
-		Jar:     jar,
-		Timeout: 10 * time.Second,
+		Jar: jar,
 	}
 
 	return &Client{
