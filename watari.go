@@ -111,7 +111,7 @@ func Attempt(client *Client, profile *Profile) (resp *http.Response, auth bool, 
 			return
 		}
 
-		resp, err = client.HTTP.Get(profile.Login)
+		resp, err = client.Get(profile.Login)
 		if err != nil {
 			fmt.Println(err)
 		}
