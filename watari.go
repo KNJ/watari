@@ -145,9 +145,8 @@ func Attempt(client *Client, profile *Profile) (resp *http.Response, auth bool, 
 		req, _ := http.NewRequest("POST", profile.Login, bytes.NewBufferString(values.Encode()))
 		req.Header.Add("Referer", profile.Login)
 		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-		req.Header.Add("User-Agent", client.UserAgent)
 
-		resp, err = client.HTTP.Do(req)
+		resp, err = client.Do(req)
 		defer resp.Body.Close()
 		if urlError, ok := err.(*url.Error); ok && urlError.Err == ErrRedirectAttempted {
 			// save session

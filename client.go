@@ -32,3 +32,10 @@ func (c *Client) Get(url string) (resp *http.Response, err error) {
 	resp, err = c.HTTP.Do(req)
 	return
 }
+
+// Do ...
+func (c *Client) Do(req *http.Request) (resp *http.Response, err error) {
+	req.Header.Add("User-Agent", c.UserAgent)
+	resp, err = c.HTTP.Do(req)
+	return
+}
