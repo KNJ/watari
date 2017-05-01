@@ -155,13 +155,19 @@ func Attempt(client *Client, profile *Profile) (resp *http.Response, auth bool, 
 		defer resp.Body.Close()
 		if urlError, ok := err.(*url.Error); ok && urlError.Err == ErrRedirectAttempted {
 			// save session
-			_ = client.CookieJar.Save()
+			err = client.CookieJar.Save()
+			if err != nil {
+				fmt.Println(err)
+			}
 			auth = true
 			resp, err = client.Get(profile.Destination)
 		}
 	} else {
 		// save session
-		_ = client.CookieJar.Save()
+		err = client.CookieJar.Save()
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 
 	return
