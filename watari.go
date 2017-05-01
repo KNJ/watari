@@ -147,9 +147,7 @@ func Attempt(client *Client, profile *Profile) (resp *http.Response, auth bool, 
 		req, _ := http.NewRequest("POST", profile.Login, bytes.NewBufferString(values.Encode()))
 		req.Header.Add("Referer", profile.Login)
 		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-		if client.UserAgent != "" {
-			req.Header.Add("User-Agent", client.UserAgent)
-		}
+		req.Header.Add("User-Agent", client.UserAgent)
 
 		resp, err = client.HTTP.Do(req)
 		defer resp.Body.Close()

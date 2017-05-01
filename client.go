@@ -22,9 +22,7 @@ func (c *Client) SetUserAgent(userAgent string) {
 // Get ...
 func (c *Client) Get(url string) (resp *http.Response, err error) {
 	req, _ := http.NewRequest("GET", url, nil)
-	if c.UserAgent != "" {
-		req.Header.Add("User-Agent", c.UserAgent)
-	}
+	req.Header.Add("User-Agent", c.UserAgent)
 	resp, err = c.HTTP.Do(req)
 	return
 }
