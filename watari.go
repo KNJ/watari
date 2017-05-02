@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -32,12 +33,6 @@ type Profile struct {
 	Credentials      *Credentials
 }
 
-// Credentials ...
-type Credentials struct {
-	Username string
-	Password string
-}
-
 // NewClient provides a client wrapping http.Client and CookieJar
 // If your session file already exists in your local disk, the
 // CookieJar will resume the session.
@@ -55,6 +50,17 @@ func NewClient(filePath string) *Client {
 		HTTP:      client,
 		CookieJar: jar,
 	}
+}
+
+// NewCredentials ...
+func NewCredentials(filePath string) *Credentials {
+	cred := &Credentials{}
+	err := cred.Load(filePath)
+	if err != nil {
+		log.Fatal("Error@NewCredentials:", err)
+	}
+
+	return cred
 }
 
 // Scrape ...
