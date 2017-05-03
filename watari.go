@@ -10,8 +10,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/KNJ/persistent-cookiejar"
 	"github.com/PuerkitoBio/goquery"
-	"github.com/juju/persistent-cookiejar"
 )
 
 // ErrRedirectAttempted ...
