@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/juju/persistent-cookiejar"
+	"github.com/KNJ/persistent-cookiejar"
 )
 
 // Client ...
