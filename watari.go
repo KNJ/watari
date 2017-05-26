@@ -17,23 +17,22 @@ import (
 // ErrRedirectAttempted ...
 var ErrRedirectAttempted = errors.New("redirect")
 
-// CSRFTokenBringer ...
-type CSRFTokenBringer interface {
-	Bring(*goquery.Document) string
+// FormData ...
+type FormData interface {
+	Get(*goquery.Document, map[string]string)
 }
 
 // Profile ...
 type Profile struct {
-	Destination      string
-	Login            string
-	Username         string
-	Password         string
-	CSRFToken        string
-	CSRFTokenBringer CSRFTokenBringer
-	Credentials      *Credentials
+	Destination string
+	Login       string
+	Username    string
+	Password    string
+	FormData    FormData
+	Credentials *Credentials
 }
 
-// NewClient provides a client wrapping http.Client and CookieJar
+// NewClient provides a client wrapping http.Client and CookieJar.
 // If your session file already exists in your local disk, the
 // CookieJar will resume the session.
 func NewClient(filePath string) *Client {
@@ -63,20 +62,32 @@ func NewCredentials(filePath string) *Credentials {
 	return cred
 }
 
-// Scrape ...
-func Scrape(client *Client, profile *Profile, fn func(*goquery.Document) interface{}) (result interface{}, err error) {
+// Source fetches the document as type of string from dest URL.
+func Source(client *Client, profile *Profile) (s string, err error) {
 	resp, err := Access(client, profile)
 	if err != nil {
-		fmt.Println(err)
+		return
 	}
 	defer resp.Body.Close()
 
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println(err)
+		return
 	}
 
-	reader := strings.NewReader(string(b))
+	s = string(b)
+
+	return
+}
+
+// Scrape ...
+func Scrape(client *Client, profile *Profile, fn func(*goquery.Document) interface{}) (result interface{}, err error) {
+	s, err := Source(client, profile)
+	if err != nil {
+		return
+	}
+
+	reader := strings.NewReader(s)
 
 	doc, err := goquery.NewDocumentFromReader(reader)
 	if err != nil {
@@ -111,9 +122,6 @@ func Attempt(client *Client, profile *Profile) (resp *http.Response, auth bool, 
 	// If redirected, the client tries to get authorized.
 	if urlError, ok := err.(*url.Error); ok && urlError.Err == ErrRedirectAttempted {
 		auth = false
-		if profile.CSRFTokenBringer == nil {
-			return
-		}
 
 		resp, err = client.Get(profile.Login)
 		if err != nil {
@@ -138,13 +146,13 @@ func Attempt(client *Client, profile *Profile) (resp *http.Response, auth bool, 
 			fmt.Println(err)
 		}
 
-		token := profile.CSRFTokenBringer.Bring(doc)
-
 		values := url.Values{}
 		values.Add(profile.Username, profile.Credentials.Username)
 		values.Add(profile.Password, profile.Credentials.Password)
-		if token != "" {
-			values.Add(profile.CSRFToken, token)
+		data := map[string]string{}
+		profile.FormData.Get(doc, data)
+		for k, v := range data {
+			values.Add(k, v)
 		}
 
 		// Attempt to sign in.
