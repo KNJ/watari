@@ -26,6 +26,7 @@ type FormData interface {
 type Profile struct {
 	Destination string
 	Login       string
+	Referer     string
 	Username    string
 	Password    string
 	FormData    FormData
@@ -123,60 +124,76 @@ func Attempt(client *Client, profile *Profile) (resp *http.Response, auth bool, 
 	if urlError, ok := err.(*url.Error); ok && urlError.Err == ErrRedirectAttempted {
 		auth = false
 
-		resp, err = client.Get(profile.Login)
-		if err != nil {
-			fmt.Println(err)
-		}
-		defer resp.Body.Close()
-
-		// If status code is not 200
-		if resp.StatusCode != 200 {
-			fmt.Printf("StatusCode=%d\n", resp.StatusCode)
-		}
-
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		reader := strings.NewReader(string(b))
-
-		doc, err := goquery.NewDocumentFromReader(reader)
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		values := url.Values{}
-		values.Add(profile.Username, profile.Credentials.Username)
-		values.Add(profile.Password, profile.Credentials.Password)
-		data := map[string]string{}
-		profile.FormData.Get(doc, data)
-		for k, v := range data {
-			values.Add(k, v)
-		}
-
 		// Attempt to sign in.
-		req, _ := http.NewRequest("POST", profile.Login, bytes.NewBufferString(values.Encode()))
-		req.Header.Add("Referer", profile.Login)
-		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		auth, err = Signin(client, profile)
+		if err != nil {
+			fmt.Println(err)
+		}
 
-		resp, err = client.Do(req)
-		defer resp.Body.Close()
-		if urlError, ok := err.(*url.Error); ok && urlError.Err == ErrRedirectAttempted {
-			// save session
-			err = client.CookieJar.Save()
+		if auth == true {
+			resp, err = client.Get(profile.Destination)
 			if err != nil {
 				fmt.Println(err)
 			}
-			auth = true
-			resp, err = client.Get(profile.Destination)
+		} else {
+			fmt.Println("Authentication failed.")
 		}
+
 	} else {
 		// save session
 		err = client.CookieJar.Save()
 		if err != nil {
 			fmt.Println(err)
 		}
+	}
+
+	return
+}
+
+// Signin ...
+func Signin(client *Client, profile *Profile) (success bool, err error) {
+	resp, err := client.Get(profile.Referer)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer resp.Body.Close()
+
+	// If status code is not 200
+	if resp.StatusCode != 200 {
+		fmt.Printf("StatusCode=%d\n", resp.StatusCode)
+	}
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return
+	}
+
+	reader := strings.NewReader(string(b))
+
+	doc, err := goquery.NewDocumentFromReader(reader)
+	if err != nil {
+		return
+	}
+
+	values := url.Values{}
+	values.Add(profile.Username, profile.Credentials.Username)
+	values.Add(profile.Password, profile.Credentials.Password)
+	data := map[string]string{}
+	profile.FormData.Get(doc, data)
+	for k, v := range data {
+		values.Add(k, v)
+	}
+
+	req, _ := http.NewRequest("POST", profile.Login, bytes.NewBufferString(values.Encode()))
+	req.Header.Add("Referer", profile.Referer)
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	_, err = client.Do(req)
+
+	if urlError, ok := err.(*url.Error); ok && urlError.Err == ErrRedirectAttempted {
+		// save session
+		err = client.CookieJar.Save()
+		success = true
 	}
 
 	return
